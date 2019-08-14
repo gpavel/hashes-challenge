@@ -1,0 +1,22 @@
+{
+  "name": "hashes-challenge",
+  "version": "1.0.0",
+  "description": "Solution of md5 hashes challenge",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gpavel/hashes-challenge.git"
+  },
+  "author": "Pavel Hurieiev",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gpavel/hashes-challenge/issues"
+  },
+  "homepage": "https://github.com/gpavel/hashes-challenge#readme",
+  "devDependencies": {
+    "@types/node": "^10.14.15"
+  }
+}
