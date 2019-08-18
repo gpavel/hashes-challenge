@@ -92,6 +92,7 @@ process.on("message", (message) => {
         next = uniqueSetsGen.next();
     }
 
+    // notify the master process that all sets are found for the specific search filter
     process.send({ type: "complete", payload: uniqueSetsFound });
     return;
   }

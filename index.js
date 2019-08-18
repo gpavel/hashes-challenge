@@ -24,23 +24,30 @@ let solutionsLeft = hashes.length;
 
 class SearchFilter {
   constructor(minLength, maxLength, maxIdx) {
+    // max length of the phrase
     this.maxLength = maxLength;
+    // max possible value for index (amount of words in wordlist)
     this.maxIdx = maxIdx;
+    // min length of the phrase
     this.length = minLength;
+    // starting point for the index
     this.idx = 0;
-    this.loops = 0;
   }
 
   next() {
+    // return null if the filter exceeds its limits
     if (this.length > this.maxLength) {
       return null;
     }
 
+    // create a filter
     let result = {
       idx: this.idx++,
       length: this.length
     };
 
+    // check if idx exceeds maxIdx
+    // if true then reset idx and add increment the length
     if (this.idx > this.maxIdx) {
       this.length += 1;
       this.idx = 0;
@@ -51,33 +58,43 @@ class SearchFilter {
 }
 
 function main() {
+  // create a time mark when application starts
   let searchStarts = Date.now();
 
-  let childProcesses = [];
+  // create an array of child processes
+  // each array is responsible for looking for unique set of words that match the initial phrase
+  let childProcesses = new Array(os.cpus().length).slice().map(() => {
+    return childProcess.fork(__dirname + "/find-set.js");
+  });
 
-  for (let i = 0; i < os.cpus().length; i++) {
-    childProcesses.push(childProcess.fork(__dirname + "/find-set.js"));
-  }
-
+  // look for unique sets that contain from min to max words
   let minWords = 2;
   let maxWords = 6;
 
+  // create a search filter that is used by all children
   let searchFilter = new SearchFilter(minWords, maxWords, library.length - 1);
 
+  // run for each child
   childProcesses.forEach((fork) => {
     let goNext = () => {
+      // get next search filter for the fork
       let next = searchFilter.next();
 
+      // if the filter is exceed its limits then destroy the fork
       if (!next) {
         fork.disconnect();
+        // revoke the fork from the array of forks
         childProcesses = childProcesses.filter((child) => child !== fork);
         return;
       }
 
+      // send next search filter to the child process
       fork.send({ type: "find", payload: { length: next.length, idx: next.idx} });
     };
 
+    // listen to messages from the fork
     fork.on("message", ({ type, payload }) => {
+      // match is found
       if (type === "match") {
         // make all permutations of the array once message is obtained
         let permutations = getAllPermutations(payload);
@@ -92,9 +109,11 @@ function main() {
           let hashIdx = hashes.indexOf(hash);
           // display the hash number into console if it is found
           if (hashIdx > -1) {
+            // count how many hashes are left
             solutionsLeft -= 1;
-            console.log(`Solution for hash ${hashIdx + 1} is found: ${phrase}`);
+            console.log(`Solution for hash ${hashIdx + 1} is found: ${phrase} = ${hash}`);
 
+            // if all hashes all decrypted then stop the application
             if (solutionsLeft === 0) {
               console.log(`All solutions are found after ${Date.now() - searchStarts}ms`);
               process.exit(0);
@@ -102,11 +121,15 @@ function main() {
           }
         }
       } else if (type === "complete") {
+        // the fork completed processing its search filter
+        // so get new search filter and continue searching for the unique word sets
         goNext();
       }
     });
   
+    // send a library and an alphabet to the child
     fork.send({ type: "register", payload: { library, alphabet } });
+    // launch first cyrcle of the search
     goNext();
   });
 }
