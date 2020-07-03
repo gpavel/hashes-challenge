@@ -4,7 +4,7 @@ let os = require("os");
 
 const { isSubset, getAllPermutations, createHash } = require("./utils");
 
-// entry phrase that is an anogram of the resulting phrase
+// entry phrase that is an anagram of the resulting phrase
 let initialPhrase = "poultry outwits ants";
 
 // prepare an alphabet that will be used for searching
@@ -19,8 +19,60 @@ library = library.filter((word) => isSubset(alphabet, word));
 // exclude all duplications from words list
 library = Array.from(new Set(library));
 
-let hashes = ["e4820b45d2277f3844eac66c903e84be", "23170acc097c24edb98fc5488ab033fe", "665e5bcb0c20062fe8abaaf4628bb154"];
+let hashes = [
+  "e4820b45d2277f3844eac66c903e84be",
+  "23170acc097c24edb98fc5488ab033fe",
+  "665e5bcb0c20062fe8abaaf4628bb154",
+];
 let solutionsLeft = hashes.length;
+
+class TimeLogger {
+  constructor(interval = 10 * 1000) {
+    this.interval = interval;
+  }
+
+  phrase() {
+    let phrases = [
+      "Please wait a few more seconds...",
+      "I am still alive",
+      "I'm doing my best, please wait",
+      "It's hot! Have you seen your CPU usage?",
+      "I know you're in a hurry, but what can I do?",
+      "Searching...",
+      "No, I am not hanging. It is just a bit time consuming...",
+    ];
+
+    let phraseIdx = Math.round(Math.random() * (phrases.length - 1));
+    return phrases[phraseIdx];
+  }
+
+  start() {
+    if (this.timerId) {
+      this.kill();
+    }
+
+    this.startedAt = Date.now();
+    this.timerId = setInterval(() => {
+      console.log(`${this.timeDiffReadable()}: ${this.phrase()}`);
+    }, this.interval);
+  }
+
+  kill() {
+    console.log(`${this.timeDiffReadable()}: Hooray!`);
+    clearInterval(this.timerId);
+    this.timerId = undefined;
+    this.startedAt = undefined;
+  }
+
+  timeDiff() {
+    return Date.now() - this.startedAt;
+  }
+
+  timeDiffReadable() {
+    let seconds = Math.round(this.timeDiff() / 1000);
+    return `${seconds}s`;
+  }
+}
 
 class SearchFilter {
   constructor(minLength, maxLength, maxIdx) {
@@ -43,7 +95,7 @@ class SearchFilter {
     // create a filter
     let result = {
       idx: this.idx++,
-      length: this.length
+      length: this.length,
     };
 
     // check if idx exceeds maxIdx
@@ -58,14 +110,18 @@ class SearchFilter {
 }
 
 function main() {
-  // create a time mark when application starts
-  let searchStarts = Date.now();
+  // create a time logger to notify a user the application is working fine
+  let timeLogger = new TimeLogger();
+  timeLogger.start();
+  process.on("exit", () => timeLogger.kill());
 
   // create an array of child processes
   // each array is responsible for looking for unique set of words that match the initial phrase
-  let childProcesses = new Array(os.cpus().length).slice().map(() => {
-    return childProcess.fork(__dirname + "/find-set.js");
-  });
+  let childProcesses = [];
+  for (let i = 0; i < os.cpus().length; i++) {
+    let fork = childProcess.fork(__dirname + "/find-set.js");
+    childProcesses.push(fork);
+  }
 
   // look for unique sets that contain from min to max words
   let minWords = 2;
@@ -89,7 +145,10 @@ function main() {
       }
 
       // send next search filter to the child process
-      fork.send({ type: "find", payload: { length: next.length, idx: next.idx} });
+      fork.send({
+        type: "find",
+        payload: { length: next.length, idx: next.idx },
+      });
     };
 
     // listen to messages from the fork
@@ -98,7 +157,7 @@ function main() {
       if (type === "match") {
         // make all permutations of the array once message is obtained
         let permutations = getAllPermutations(payload);
-  
+
         // process every permutation
         for (let permutation of permutations) {
           // combine array into a string
@@ -111,11 +170,11 @@ function main() {
           if (hashIdx > -1) {
             // count how many hashes are left
             solutionsLeft -= 1;
-            console.log(`Solution for hash ${hashIdx + 1} is found: ${phrase} = ${hash}`);
+            console.log(`${timeLogger.timeDiffReadable()}: solution for hash ${hashIdx + 1} has been found: ${phrase} = ${hash}`);
 
             // if all hashes all decrypted then stop the application
             if (solutionsLeft === 0) {
-              console.log(`All solutions are found after ${Date.now() - searchStarts}ms`);
+              console.log(`${timeLogger.timeDiffReadable()}: all solutions have been found`);
               process.exit(0);
             }
           }
@@ -126,10 +185,10 @@ function main() {
         goNext();
       }
     });
-  
+
     // send a library and an alphabet to the child
     fork.send({ type: "register", payload: { library, alphabet } });
-    // launch first cyrcle of the search
+    // launch first loop of the search
     goNext();
   });
 }
